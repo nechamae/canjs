@@ -171,10 +171,10 @@
 		var renderer = can.view('renderer_test');
 		ok(can.isFunction(directResult), 'Renderer returned directly');
 		ok(can.isFunction(renderer), 'Renderer is a function');
-		equal(renderer({ test : 'working test' }), 'This is a working test', 'Rendered');
+		equal(renderer.render({ test : 'working test' }), 'This is a working test', 'Rendered');
 		renderer = can.view(can.test.path("view/test//template.ejs"));
 		ok(can.isFunction(renderer), 'Renderer is a function');
-		equal(renderer({ message : 'Rendered!' }), '<h3>Rendered!</h3>', 'Synchronous template loaded and rendered');
+		equal(renderer.render({ message : 'Rendered!' }), '<h3>Rendered!</h3>', 'Synchronous template loaded and rendered');
 		// TODO doesn't get caught in Zepto for whatever reason
 		// raises(function() {
 		//      can.view('jkflsd.ejs');
@@ -724,13 +724,11 @@
 
 		
 		var tmp = can.view.mustache("<div><unique-element-name></unique-element-name></div>");
-		
-		
+
 		var frag = tmp()
 		
 		ok(true, "no error")
-		
-	})
+	});
 	
 	if (window.require) {
 		if (window.require.config && window.require.toUrl) {
