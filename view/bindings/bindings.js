@@ -1,9 +1,6 @@
 steal("can/util","can/view/mustache", "can/control", function(can){
 	
-	// IE < 8 doesn't support .hasAttribute, so feature detect it.
-	var hasAttribute = function(el, name) {
-		return el.hasAttribute ? el.hasAttribute(name) : el.getAttribute(name) !== null;
-	};
+	
 	
 	/**
 	 * @function can.view.bindings.can-value can-value
@@ -18,74 +15,56 @@ steal("can/util","can/view/mustache", "can/control", function(can){
 	 * 
 	 *     <input type='text' can-value='first.name'/>
 	 * 
-	 * @param {can.Mustache.key} key A named value in the current scope.
+	 * @param {can.Mustache.key} key A named value in the current scope. This reference
+	 * a [can.Map] property or a [can.compute].
 	 * 
 	 * @body
 	 * 
 	 * ## Use
 	 * 
-	 * Add a `can-value="KEY"` attribute to an input or select element and
+	 * Add a `can-value="KEY"` attribute to an input, textarea or select element and
 	 * the element's value will be cross-bound to an observable value specified by `KEY`.
 	 * 
+	 * 
+	 * @demo can/view/bindings/input-text.html
+	 * 
 	 * Depending on the element and the element's type, `can-value` takes on 
-	 * different behaviors.  If an input element has a type
-	 * not listed here, the behavior is the same as the `text` type.
+	 * different behaviors. This page documents the default behavior that happens
+	 * on text input and textarea elements. Checkout the other can-value
+	 * pages for behavior for specific elements.
 	 * 
-	 * ## input type=text
-	 * 
-	 * Cross binds the input's string text value with the observable value.
-	 * 
-	 * @demo can/view/bindings/hyperloop.html
-	 * 
-	 * ## input type=checkbox
-	 * 
-	 * Cross binds the checked property to a true or false value. An alternative
-	 * true and false value can be specified by setting `can-true-value` and
-	 * `can-false-value` attributes.
-	 * 
-	 * @demo can/view/bindings/input-checkbox.html
-	 * 
-	 * ## input type='radio'
-	 * 
-	 * If the radio element is checked, sets the observable specified by `can-value` to match the value of 
-	 * `value` attribute.  
-	 * 
-	 * @demo can/view/bindings/input-radio.html
-	 * 
-	 * ## select
-	 * 
-	 * Cross binds the selected option value with an observable value.
-	 * 
-	 * @demo can/view/bindings/select.html
 	 * 
 	 */
-	can.view.Scanner.attribute("can-value", function(data, el){
+	can.view.attr("can-value", function( el, data ){
 		
 		var attr = el.getAttribute("can-value"),
 			value = data.scope.computeData(attr,{args:[]}).compute;
 		
 		if(el.nodeName.toLowerCase() === "input"){
 			if(el.type === "checkbox") {
-				if( hasAttribute(el, "can-true-value") ) {
+				if( can.attr.has(el, "can-true-value") ) {
 					var trueValue = data.scope.compute( el.getAttribute("can-true-value") )
-				} else {
-					var trueValue = can.compute(true)
-				}
-				if( hasAttribute(el, "can-false-value") ) {
+				} 
+				if( can.attr.has(el, "can-false-value") ) {
 					var falseValue = data.scope.compute( el.getAttribute("can-false-value") )
-				} else {
-					var falseValue = can.compute(false)
-				}
-			}
+				} 
+			} 
 			
 			if(el.type === "checkbox" || el.type === "radio") {
 				new Checked(el,{
 					value: value,
-					trueValue: trueValue,
-					falseValue: falseValue
+					trueValue: trueValue || can.compute(true),
+					falseValue: falseValue || can.compute(false)
 				});
 				return;
 			}
+		}
+
+		if(el.nodeName.toLowerCase() === "select" && el.multiple) {
+			new Multiselect(el, {
+				value: value
+			});
+			return;
 		}
 		
 		new Value(el,{value: value})
@@ -133,10 +112,10 @@ steal("can/util","can/view/mustache", "can/control", function(can){
 	 * @demo can/view/bindings/can-event.html
 	 * 
 	 */
-	can.view.Scanner.attribute(/can-[\w\.]+/,function(data, el){
+	can.view.attr(/can-[\w\.]+/,function( el, data ){
 		
-		var attributeName = data.attr,
-			event = data.attr.substr("can-".length),
+		var attributeName = data.attributeName,
+			event = attributeName.substr("can-".length),
 			handler = function(ev){
 				var attr = el.getAttribute(attributeName),
 					scopeData = data.scope.read(attr,{returnObserveMethods: true, isArgument: true});
@@ -177,9 +156,9 @@ steal("can/util","can/view/mustache", "can/control", function(can){
 			
 			this.options.value(this.element[0].value)
 		}
-	})
+	}), 
 	
-	var Checked = can.Control.extend({
+	Checked = can.Control.extend({
 		init: function(){
 			this.isCheckebox = (this.element[0].type.toLowerCase() == "checkbox");
 			this.check()
@@ -195,7 +174,11 @@ steal("can/util","can/view/mustache", "can/control", function(can){
 					
 				this.element[0].checked = ( value == trueValue );
 			} else {
-				can.view.elements.setAttr(this.element[0], 'checked', this.options.value() === this.element[0].value);
+				var setOrRemove = this.options.value() === this.element[0].value ?
+					"set" : "remove";
+				
+				can.attr[ setOrRemove ](this.element[0], 'checked', true);
+					
 			}
 			
 			
@@ -209,6 +192,71 @@ steal("can/util","can/view/mustache", "can/control", function(can){
 					this.options.value( this.element[0].value );
 				}
 			}
+			
+		}
+	}), 
+	
+	Multiselect = Value.extend({
+		init: function() {
+			this.delimiter = ";"
+			this.set();
+		},
+
+		set: function() {
+			
+			var newVal = this.options.value(), 
+				self = this;
+
+			if(typeof newVal === 'string') {
+				//when given a string, try to extract all the options from it
+				newVal = newVal.split(this.delimiter);
+				this.isString = true;
+			} else if(newVal) {
+				//when given something else, try to make it an array and deal with it
+				newVal = can.makeArray(newVal);
+			}
+
+			//jQuery.val is required here, which will break compatibility with other libs
+			var isSelected = {};
+			can.each(newVal, function(val){
+				isSelected[val] = true;
+			})
+			
+			can.each(this.element[0].childNodes, function(option){
+				if(option.value) {
+					option.selected = !!isSelected[option.value]
+				}
+				
+			})
+
+		},
+
+		get: function(){
+			var values = [],
+				children = this.element[0].childNodes;
+			
+			can.each(children, function(child){
+				if(child.selected && child.value) {
+					values.push(child.value)
+				}
+			})
+
+			return values;
+		},
+
+		'change': function() {
+			var value = this.get(),
+				currentValue = this.options.value();
+				
+			if(this.isString || typeof currentValue == "string") {
+				this.isString = true;
+				this.options.value( value.join(this.delimiter) )
+			} else if(currentValue instanceof can.List){
+				currentValue.attr(value, true)
+			} else {
+				this.options.value(value);
+			}
+			
 			
 		}
 	});
